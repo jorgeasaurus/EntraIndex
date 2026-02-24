@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EntraIndex -- Microsoft Entra PowerShell</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-deep: #0a0a0a;
+            --bg-panel: #0d120d;
+            --bg-raised: #111a11;
+            --bg-glow: #152015;
+            --border-dim: #0f3d0f;
+            --border-mid: #1a5c1a;
+            --border-bright: #33ff33;
+            --phosphor: #33ff33;
+            --phosphor-dim: #2dcc2d;
+            --phosphor-faint: #1a8a1a;
+            --amber: #ffb000;
+            --amber-dim: #a07000;
+            --cyan: #00ccaa;
+            --red: #cc3333;
+            --text-bright: #33ff33;
+            --text-mid: #2dcc2d;
+            --text-dim: #1a8a1a;
+            --text-ghost: #0f5a0f;
+            --font-display: 'VT323', monospace;
+            --font-mono: 'Share Tech Mono', monospace;
+            --font-body: 'Share Tech Mono', monospace;
+        }
+
+        /* --- Scanline overlay --- */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.06) 2px,
+                rgba(0, 0, 0, 0.06) 4px
+            );
+        }
+
+        /* --- Vignette overlay (screen curvature) --- */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            pointer-events: none;
+            background: radial-gradient(
+                ellipse 85% 85% at 50% 50%,
+                transparent 60%,
+                rgba(0, 0, 0, 0.3) 85%,
+                rgba(0, 0, 0, 0.6) 100%
+            );
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-deep);
+            color: var(--text-bright);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(51, 255, 51, 0.03), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(51, 255, 51, 0.02), transparent);
+        }
+
+        /* --- CRT flicker --- */
+        @keyframes crt-flicker {
+            0%, 100% { opacity: 1; }
+            3% { opacity: 0.97; }
+            6% { opacity: 1; }
+            9% { opacity: 0.98; }
+            12% { opacity: 1; }
+            50% { opacity: 0.99; }
+            52% { opacity: 1; }
+            80% { opacity: 0.98; }
+            82% { opacity: 1; }
+        }
+
+        @keyframes cursor-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes glow-pulse {
+            0%, 100% { text-shadow: 0 0 4px rgba(51, 255, 51, 0.4), 0 0 8px rgba(51, 255, 51, 0.2); }
+            50% { text-shadow: 0 0 6px rgba(51, 255, 51, 0.6), 0 0 16px rgba(51, 255, 51, 0.3); }
+        }
+
+        .animate-slide-in {
+            opacity: 0;
+            animation: slide-in 0.3s ease forwards;
+        }
+
+        /* --- Scrollbar --- */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-deep); }
+        ::-webkit-scrollbar-thumb { background: var(--border-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--phosphor-dim); }
+
+        /* --- Layout containers --- */
+        .app-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* --- Header --- */
+        .header-bar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background: rgba(10, 10, 10, 0.95);
+            border-bottom: 1px solid var(--border-dim);
+            padding: 12px 0;
+            animation: crt-flicker 8s infinite;
+        }
+        .header-bar::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--phosphor-dim), var(--phosphor), var(--phosphor-dim), transparent);
+            opacity: 0.6;
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .logo-block h1 {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--phosphor);
+            text-shadow:
+                0 0 4px rgba(51, 255, 51, 0.6),
+                0 0 12px rgba(51, 255, 51, 0.3),
+                0 0 24px rgba(51, 255, 51, 0.1);
+            animation: glow-pulse 4s ease-in-out infinite;
+        }
+        .logo-block .subtitle {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-top: 0;
+        }
+        .logo-block .subtitle::before {
+            content: '> ';
+            color: var(--phosphor-dim);
+        }
+
+        /* --- Stats display --- */
+        .stats-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-family: var(--font-mono);
+        }
+        .stat-block {
+            text-align: center;
+        }
+        .stat-block .stat-value {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 400;
+            color: var(--phosphor);
+            text-shadow: 0 0 8px rgba(51, 255, 51, 0.4);
+        }
+        .stat-block .stat-label {
+            font-size: 0.6rem;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+        .stat-divider {
+            width: 1px;
+            height: 32px;
+            background: var(--border-dim);
+        }
+
+        .icon-btn {
+            padding: 8px;
+            border: 1px solid var(--border-dim);
+            background: transparent;
+            color: var(--text-mid);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover {
+            color: var(--phosphor);
+            border-color: var(--phosphor-dim);
+            box-shadow: 0 0 8px rgba(51, 255, 51, 0.15);
+        }
+        .icon-btn svg { width: 16px; height: 16px; }
+
+        /* --- Filter bar --- */
+        .filter-bar {
+            position: sticky;
+            top: 60px;
+            z-index: 39;
+            background: rgba(10, 10, 10, 0.9);
+            padding: 12px 0;
+        }
+        .filter-bar > .app-container {
+            border: 1px solid var(--border-dim);
+            border-radius: 4px;
+            padding: 12px 24px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: nowrap;
+            align-items: center;
+        }
+
+        .crt-input {
+            flex: 1;
+            min-width: 120px;
+            padding: 8px 12px 8px 36px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            color: var(--phosphor);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .crt-input::placeholder { color: var(--text-ghost); }
+        .crt-input:focus {
+            border-color: var(--phosphor-dim);
+            box-shadow: 0 0 10px rgba(51, 255, 51, 0.1), inset 0 0 10px rgba(51, 255, 51, 0.02);
+        }
+
+        .search-wrap {
+            position: relative;
+            flex: 1.5;
+            min-width: 100px;
+        }
+        .search-wrap svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-ghost);
+            pointer-events: none;
+        }
+
+        .crt-select {
+            padding: 8px 28px 8px 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            color: var(--text-mid);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%230d5e0d' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }
+        .crt-select:focus {
+            border-color: var(--phosphor-dim);
+            color: var(--text-bright);
+        }
+        .crt-select option {
+            background: var(--bg-panel);
+            color: var(--text-bright);
+        }
+
+        /* --- Verb filter tags --- */
+        .verb-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            padding: 8px 0;
+        }
+        .verb-tag {
+            padding: 5px 14px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--border-dim);
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .verb-tag:hover {
+            border-color: var(--text-mid);
+            color: var(--text-mid);
+        }
+        .verb-tag-active {
+            background: rgba(51, 255, 51, 0.08) !important;
+            color: var(--phosphor) !important;
+            border-color: var(--phosphor-dim) !important;
+            box-shadow: 0 0 6px rgba(51, 255, 51, 0.1);
+        }
+
+        /* --- Presets --- */
+        .presets-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding: 4px 0;
+        }
+        .preset-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            border: 1px solid var(--border-dim);
+            color: var(--text-mid);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .preset-chip button { background: none; border: none; color: inherit; cursor: pointer; font-size: 0.75rem; }
+        .preset-chip button:hover { color: var(--red); }
+        .save-preset-btn {
+            padding: 3px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            border: 1px dashed var(--text-ghost);
+            background: transparent;
+            color: var(--text-ghost);
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .save-preset-btn:hover { border-color: var(--phosphor-dim); color: var(--phosphor-dim); }
+
+        /* --- Theme switcher --- */
+        .theme-switcher {
+            padding: 6px 26px 6px 8px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            color: var(--text-mid);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%230d5e0d' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+        }
+        .theme-switcher:focus {
+            border-color: var(--phosphor-dim);
+            color: var(--text-bright);
+        }
+        .theme-switcher option {
+            background: var(--bg-panel);
+            color: var(--text-bright);
+        }
+
+        /* --- Recent searches dropdown --- */
+        .recent-dropdown {
+            display: none;
+            position: absolute;
+            left: 0; right: 0;
+            top: 100%;
+            margin-top: 4px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            z-index: 50;
+            max-height: 256px;
+            overflow-y: auto;
+        }
+        .recent-dropdown button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            background: none;
+            border: none;
+            color: var(--text-mid);
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .recent-dropdown button:hover { background: var(--bg-raised); color: var(--phosphor); }
+        .recent-dropdown .clear-btn { font-size: 0.7rem; color: var(--text-ghost); border-top: 1px solid var(--border-dim); }
+        .recent-dropdown .clear-btn:hover { color: var(--red); }
+
+        /* --- Export menu --- */
+        .export-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 4px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            z-index: 50;
+            min-width: 120px;
+        }
+        .export-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 6px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            background: none;
+            border: none;
+            color: var(--text-mid);
+            cursor: pointer;
+        }
+        .export-menu button:hover { background: var(--bg-raised); color: var(--phosphor); }
+
+        /* --- Main grid --- */
+        .main-content {
+            padding: 24px 0 80px;
+        }
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        /* --- Cmdlet cards --- */
+        .cmdlet-card {
+            position: relative;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            padding: 14px 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+        }
+        .cmdlet-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 2px;
+            height: 100%;
+            background: var(--border-dim);
+            transition: all 0.2s;
+        }
+        .cmdlet-card:hover {
+            border-color: var(--border-mid);
+            background: var(--bg-raised);
+        }
+        .cmdlet-card:hover::before {
+            background: var(--phosphor);
+            box-shadow: 0 0 6px var(--phosphor-dim);
+        }
+
+        /* Verb-specific left border colors */
+        .verb-get .cmdlet-card::before, .cmdlet-card.verb-get::before,
+        .verb-find .cmdlet-card::before, .cmdlet-card.verb-find::before { background: var(--phosphor); }
+        .verb-set .cmdlet-card::before, .cmdlet-card.verb-set::before,
+        .verb-update .cmdlet-card::before, .cmdlet-card.verb-update::before { background: var(--amber); }
+        .verb-new .cmdlet-card::before, .cmdlet-card.verb-new::before,
+        .verb-confirm .cmdlet-card::before, .cmdlet-card.verb-confirm::before { background: var(--cyan); }
+        .verb-remove .cmdlet-card::before, .cmdlet-card.verb-remove::before,
+        .verb-clear .cmdlet-card::before, .cmdlet-card.verb-clear::before { background: var(--red); }
+        .verb-invoke .cmdlet-card::before, .cmdlet-card.verb-invoke::before { background: var(--amber-dim); }
+        .verb-add .cmdlet-card::before, .cmdlet-card.verb-add::before { background: var(--phosphor-dim); }
+        .verb-connect .cmdlet-card::before, .cmdlet-card.verb-connect::before,
+        .verb-disconnect .cmdlet-card::before, .cmdlet-card.verb-disconnect::before { background: var(--text-dim); }
+
+        .card-name {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: var(--phosphor);
+            word-break: break-all;
+            line-height: 1.3;
+            text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+        }
+        .card-name a {
+            color: var(--text-ghost);
+            text-decoration: none;
+            margin-left: 4px;
+            transition: color 0.15s;
+        }
+        .card-name a:hover { color: var(--phosphor); }
+        .card-name a svg { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; }
+
+        .card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .card-badges {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border: 1px solid;
+        }
+        .badge-api-stable { color: var(--phosphor-dim); border-color: var(--border-dim); background: rgba(51, 255, 51, 0.04); }
+        .badge-api-beta { color: var(--amber); border-color: var(--amber-dim); background: rgba(255, 176, 0, 0.06); }
+        .badge-category { color: var(--text-dim); border-color: var(--border-dim); background: var(--bg-raised); }
+        .badge-perm { color: var(--amber-dim); border-color: rgba(160, 112, 0, 0.3); background: rgba(255, 176, 0, 0.04); }
+        .badge-examples { color: var(--phosphor-dim); border-color: rgba(26, 158, 26, 0.3); background: rgba(51, 255, 51, 0.04); }
+
+        .card-desc {
+            font-family: var(--font-body);
+            font-size: 0.85rem;
+            color: var(--text-mid);
+            line-height: 1.6;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .card-expanded .card-desc { -webkit-line-clamp: unset; }
+
+        .card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .card-detail { min-height: 0; }
+
+        .card-focused {
+            outline: 1px solid var(--phosphor);
+            outline-offset: 2px;
+            box-shadow: 0 0 12px rgba(51, 255, 51, 0.15);
+        }
+
+        /* --- Detail sections inside expanded cards --- */
+        .detail-syntax {
+            position: relative;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-dim);
+            padding: 14px 44px 14px 14px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--phosphor);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.7;
+            margin-bottom: 10px;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            padding: 4px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-dim);
+            color: var(--text-ghost);
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.15s;
+        }
+        .copy-btn:hover { color: var(--phosphor); border-color: var(--phosphor-dim); }
+        .detail-syntax:hover .copy-btn,
+        .example-block:hover .copy-btn,
+        .copy-btn:focus { opacity: 1; }
+
+        details { margin-bottom: 6px; }
+        details[open] > summary svg.chevron { transform: rotate(90deg); }
+        summary { list-style: none; cursor: pointer; }
+        summary::-webkit-details-marker { display: none; }
+
+        .detail-summary {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            padding: 4px 0;
+            transition: color 0.15s;
+        }
+        .detail-summary:hover { color: var(--text-mid); }
+        .detail-summary svg { width: 12px; height: 12px; transition: transform 0.15s; }
+
+        .params-table {
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            border-collapse: collapse;
+            margin-top: 4px;
+        }
+        .params-table th {
+            text-align: left;
+            padding: 6px 14px 6px 0;
+            color: var(--text-ghost);
+            font-weight: 400;
+            border-bottom: 1px solid var(--border-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .params-table td {
+            padding: 6px 14px 6px 0;
+            border-bottom: 1px solid rgba(15, 61, 15, 0.5);
+        }
+        .params-table .param-name { color: var(--phosphor); }
+        .params-table .param-type { color: var(--text-mid); }
+        .params-table .param-req { color: var(--amber); }
+        .params-table .param-opt { color: var(--text-ghost); }
+
+        .example-block {
+            position: relative;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-dim);
+            padding: 12px 44px 12px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            color: var(--text-mid);
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.6;
+            margin-bottom: 6px;
+        }
+
+        .perm-tag {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 3px 10px;
+            border: 1px solid rgba(160, 112, 0, 0.2);
+            color: var(--amber-dim);
+            background: rgba(255, 176, 0, 0.03);
+            margin: 2px;
+        }
+
+        .related-btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 4px 12px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border-dim);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .related-btn:hover { color: var(--phosphor); border-color: var(--phosphor-dim); }
+
+        /* --- PowerShell syntax highlighting --- */
+        .ps-comment { color: var(--text-ghost); font-style: italic; }
+        .ps-string { color: var(--amber); }
+        .ps-variable { color: var(--cyan); }
+        .ps-cmdlet { color: var(--phosphor); }
+        .ps-type { color: var(--amber-dim); }
+
+        /* --- Loading spinner --- */
+        .crt-spinner {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--border-dim);
+            border-top-color: var(--phosphor);
+            animation: spin 0.8s linear infinite;
+        }
+        .crt-spinner-sm {
+            width: 18px;
+            height: 18px;
+            border-width: 2px;
+        }
+
+        .loading-text {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 8px;
+        }
+        .loading-text::after {
+            content: '_';
+            animation: cursor-blink 1s step-end infinite;
+        }
+
+        /* --- No results --- */
+        .no-results {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .no-results h3 {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            color: var(--text-mid);
+            letter-spacing: 0.1em;
+        }
+        .no-results p {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-ghost);
+            margin-top: 8px;
+        }
+
+        /* --- Alpha index sidebar --- */
+        .alpha-nav {
+            display: none;
+            position: fixed;
+            right: 6px;
+            top: 300px;
+            bottom: 16px;
+            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            z-index: 30;
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+        }
+        @media (min-width: 1024px) { .alpha-nav { display: flex; } }
+        .alpha-nav button {
+            padding: 1px 4px;
+            background: none;
+            border: none;
+            color: var(--text-ghost);
+            cursor: pointer;
+            transition: color 0.1s;
+        }
+        .alpha-nav button:hover { color: var(--phosphor); text-shadow: 0 0 4px rgba(51, 255, 51, 0.4); }
+
+        /* --- Back to top --- */
+        .back-to-top {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-dim);
+            color: var(--text-mid);
+            cursor: pointer;
+            z-index: 30;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s;
+        }
+        .back-to-top:hover { color: var(--phosphor); border-color: var(--phosphor-dim); }
+        .back-to-top.visible { opacity: 1; pointer-events: auto; }
+        .back-to-top svg { width: 18px; height: 18px; }
+
+        /* --- Responsive --- */
+
+        /* Tablet */
+        @media (max-width: 768px) {
+            .app-container { padding: 0 16px; }
+            .stats-row { gap: 10px; }
+            .stat-block .stat-value { font-size: 1.3rem; }
+            .filter-bar { position: relative; top: auto; }
+            .main-content { padding: 16px 0 80px; }
+        }
+
+        /* Mobile */
+        @media (max-width: 640px) {
+            .app-container { padding: 0 12px; }
+
+            /* Header compact */
+            .header-bar { padding: 8px 0; }
+            .header-inner { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .logo-block h1 { font-size: 1.4rem; }
+            .logo-block .subtitle { display: none; }
+
+            /* Stats row compact */
+            .stats-row { gap: 8px; width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+            .stat-block .stat-value { font-size: 1.1rem; }
+            .stat-block .stat-label { font-size: 0.5rem; letter-spacing: 0.15em; }
+            .stat-divider { height: 20px; }
+
+            /* Filter bar */
+            .filter-bar { position: relative; top: auto; padding: 10px 0; }
+            .filter-bar > .app-container { padding: 10px 12px; }
+            .filter-row { flex-direction: column; gap: 8px; }
+            .crt-input, .crt-select, .search-wrap { width: 100%; max-width: 100%; box-sizing: border-box; }
+
+            /* Verb tags hidden, toggle visible */
+            .verb-tags { display: none; }
+
+            /* Cards compact */
+            .cmdlet-card { padding: 12px 14px; }
+            .card-name { font-size: 0.82rem; }
+            .card-desc { font-size: 0.8rem; }
+            .card-header { flex-direction: column; gap: 6px; }
+            .card-badges { align-self: flex-start; }
+
+            /* Contain expanded card content within viewport */
+            .cmdlet-card, .card-detail, .detail-syntax, .params-table, .example-block, details { max-width: 100%; box-sizing: border-box; }
+            .cmdlet-card, .card-detail, details { overflow: hidden; }
+
+            /* Detail sections compact */
+            .detail-syntax { padding: 10px 36px 10px 10px; font-size: 0.78rem; }
+            .params-table { display: block; overflow-x: auto; }
+            .params-table th, .params-table td { padding: 4px 8px; font-size: 0.75rem; white-space: nowrap; }
+
+            /* Back to top - touch friendly */
+            .back-to-top { bottom: 16px; right: 16px; padding: 12px; }
+            .back-to-top svg { width: 20px; height: 20px; }
+
+            /* Main content */
+            .main-content { padding: 12px 0 80px; }
+
+            /* Theme switcher compact */
+            .theme-switcher { font-size: 0.7rem; padding: 4px 20px 4px 6px; }
+
+            /* Onboarding tooltip */
+            .onboarding-tip { max-width: calc(100vw - 32px); }
+        }
+
+        /* Small phones */
+        @media (max-width: 380px) {
+            .app-container { padding: 0 8px; }
+            .logo-block h1 { font-size: 1.2rem; }
+            .stat-divider { display: none; }
+            .stats-row { gap: 12px; }
+        }
+
+        .hidden { display: none !important; }
+
+        /* --- Mobile filter toggle --- */
+        .mobile-filter-toggle {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--border-dim);
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 4px;
+        }
+        .mobile-filter-toggle:hover { border-color: var(--phosphor-dim); color: var(--phosphor-dim); }
+        @media (max-width: 640px) { .mobile-filter-toggle { display: inline-flex; } }
+        .filter-badge {
+            display: none;
+            padding: 1px 6px;
+            font-size: 0.65rem;
+            background: rgba(51, 255, 51, 0.1);
+            color: var(--phosphor);
+            border: 1px solid var(--phosphor-dim);
+        }
+        .filter-badge.active { display: inline; }
+
+        /* --- Onboarding tooltip --- */
+        .onboarding-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            pointer-events: none;
+        }
+        .onboarding-tip {
+            position: absolute;
+            background: var(--bg-panel);
+            border: 1px solid var(--phosphor-dim);
+            padding: 16px;
+            max-width: 300px;
+            pointer-events: auto;
+            box-shadow: 0 0 16px rgba(51, 255, 51, 0.08);
+        }
+        .onboarding-tip p {
+            font-family: var(--font-body);
+            font-size: 0.85rem;
+            color: var(--text-bright);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .onboarding-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .onboarding-dismiss {
+            padding: 4px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: none;
+            border: none;
+            color: var(--text-ghost);
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        .onboarding-dismiss:hover { color: var(--text-mid); }
+        .onboarding-next {
+            padding: 4px 14px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(51, 255, 51, 0.08);
+            border: 1px solid var(--phosphor-dim);
+            color: var(--phosphor);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .onboarding-next:hover { background: rgba(51, 255, 51, 0.15); }
+
+        /* --- Suite navigation --- */
+        .suite-nav {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .suite-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            font-family: var(--font-body);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            text-decoration: none;
+            color: var(--text-tertiary);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg-light);
+            border-radius: var(--radius-pill);
+            transition: all 0.2s ease;
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            white-space: nowrap;
+        }
+        .suite-link:hover {
+            color: var(--text-secondary);
+            background: var(--glass-bg);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+        .suite-link.active {
+            color: var(--accent-blue);
+            background: rgba(0, 122, 255, 0.12);
+            border-color: rgba(0, 122, 255, 0.25);
+        }
+        :root.light .suite-link:hover {
+            border-color: rgba(0, 0, 0, 0.12);
+        }
+        :root.light .suite-link.active {
+            background: rgba(0, 122, 255, 0.08);
+            border-color: rgba(0, 122, 255, 0.20);
+        }
+        .suite-icon {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            letter-spacing: 0;
+        }
+        :root.light .suite-icon {
+            background: rgba(0, 0, 0, 0.06);
+        }
+        .suite-link.active .suite-icon {
+            background: rgba(0, 122, 255, 0.15);
+        }
+        @media (max-width: 640px) {
+            .suite-link span:not(.suite-icon) { display: none; }
+            .suite-link { padding: 5px 8px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header-bar">
+        <div class="app-container">
+            <div class="header-inner">
+                <div class="logo-block">
+                    <h1>Entra Index</h1>
+                    <div class="subtitle">Microsoft Entra PowerShell Cmdlet Index</div>
+                </div>
+                <nav class="suite-nav">
+                    <a href="https://jorgeasaurus.github.io/AzIndex/" class="suite-link"><span class="suite-icon">Az</span> <span>Azure</span></a>
+                    <a href="https://jorgeasaurus.github.io/MecmIndex/" class="suite-link"><span class="suite-icon">CM</span> <span>MECM</span></a>
+                    <a href="https://jorgeasaurus.github.io/MgGraphIndex/" class="suite-link"><span class="suite-icon">Mg</span> <span>Graph</span></a>
+                    <a href="https://jorgeasaurus.github.io/EntraIndex/" class="suite-link active"><span class="suite-icon">En</span> <span>Entra</span></a>
+                </nav>
+                <div class="stats-row">
+                    <div class="stat-block">
+                        <div class="stat-value" id="moduleVersion">--</div>
+                        <div class="stat-label">Module</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-block">
+                        <div class="stat-value" id="totalCmdlets">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-block">
+                        <div class="stat-value" id="filteredCount">0</div>
+                        <div class="stat-label">Showing</div>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div style="position:relative" id="exportWrap">
+                        <button onclick="toggleExportMenu()" class="icon-btn" aria-label="Export" title="Export filtered results">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </button>
+                        <div id="exportMenu" class="export-menu">
+                            <button onclick="exportResults('json')">JSON</button>
+                            <button onclick="exportResults('csv')">CSV</button>
+                        </div>
+                    </div>
+                    <select class="theme-switcher" id="themeSwitcher" aria-label="Switch theme" onchange="switchTheme(this.value)">
+                        <option value="index.html">Acrylic</option>
+                        <option value="cyberpunk.html">Cyberpunk</option>
+                        <option value="crt.html" selected>CRT</option>
+                        <option value="synthwave.html">Synthwave</option>
+                        <option value="blueprint.html">Blueprint</option>
+                        <option value="solarized.html">Solarized</option>
+                        <option value="geocities.html">Geocities</option>
+                        <option value="ise.html">ISE</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <div class="app-container">
+            <div class="filter-row">
+                <div class="search-wrap">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <input type="text" class="crt-input" id="searchInput" placeholder="Search">
+                    <div id="recentSearches" class="recent-dropdown"></div>
+                </div>
+                <select class="crt-select" id="categoryFilter" aria-label="Category"><option value="">All Categories</option></select>
+                <select class="crt-select" id="moduleFilter" aria-label="Module"><option value="">All Modules</option></select>
+                <select class="crt-select" id="permissionFilter" aria-label="Permission"><option value="">All Permissions</option></select>
+                <select class="crt-select" id="apiVersionFilter" aria-label="API version">
+                    <option value="">All Versions</option>
+                    <option value="v1.0">v1.0</option>
+                    <option value="beta">Beta</option>
+                </select>
+                <select class="crt-select" id="sortSelect" aria-label="Sort">
+                    <option value="alpha">Sort: A-Z</option>
+                    <option value="category">Sort: Category</option>
+                    <option value="permissions">Sort: Permissions</option>
+                    <option value="examples">Sort: Examples</option>
+                </select>
+            </div>
+            <button class="mobile-filter-toggle" onclick="toggleMobileFilters()">Filters <span id="filterBadge" class="filter-badge"></span></button>
+            <div class="verb-tags" id="verbFilters"></div>
+            <div class="presets-row" id="presetsBar">
+                <div id="presetsList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+                <button onclick="savePreset()" class="save-preset-btn">+ Save Preset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <main class="main-content">
+            <div class="cards-grid" id="cmdletsGrid">
+                <div style="text-align:center;padding:60px 20px">
+                    <div class="crt-spinner"></div>
+                    <div class="loading-text">Loading cmdlets</div>
+                </div>
+            </div>
+            <div class="no-results" id="noResults">
+                <h3>No Matches Found</h3>
+                <p>Try adjusting your search or filters</p>
+            </div>
+            <div id="scrollSentinel" style="height:1px"></div>
+        </main>
+    </div>
+
+    <nav class="alpha-nav" id="alphaIndex"></nav>
+
+    <button class="back-to-top" id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+    </button>
+
+    <!-- Onboarding tooltip container -->
+    <div id="onboardingOverlay" class="onboarding-overlay">
+        <div id="onboardingTip" class="onboarding-tip">
+            <p id="tipText"></p>
+            <div class="onboarding-actions">
+                <button onclick="dismissOnboarding()" class="onboarding-dismiss">Dismiss</button>
+                <button onclick="showNextTip()" class="onboarding-next">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cmdlets = [];
+        let filteredCmdlets = [];
+        let activeVerbs = new Set();
+        let renderedCount = 0;
+        const CHUNK_SIZE = 50;
+        let scrollObserver = null;
+        let focusedCardIndex = -1;
+        let recentSearches = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+        let nounMap = {};
+        let currentSort = 'alpha';
+        let savedPresets = JSON.parse(localStorage.getItem('savedPresets') || '[]');
+        let hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding') === 'true';
+        let onboardingStep = 0;
+        let descriptionsLoaded = false;
+        const moduleDetailCache = new Map();
+        const permissionIndex = new Map();
+
+        function debounce(fn, ms) {
+            let id;
+            return (...args) => { clearTimeout(id); id = setTimeout(() => fn(...args), ms); };
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
+
+        function getVerb(name) {
+            const idx = name.indexOf('-');
+            return idx > 0 ? name.substring(0, idx) : '';
+        }
+
+        async function loadCmdlets() {
+            try {
+                const response = await fetch('data/manifest.json');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const wrapper = await response.json();
+                if (wrapper.v) {
+                    var verEl = document.getElementById('moduleVersion');
+                    if (verEl) verEl.textContent = 'v' + wrapper.v;
+                }
+                const data = wrapper.d || wrapper;
+                cmdlets = data.map(c => ({
+                    name: c.n || 'Unknown Cmdlet',
+                    verb: c.v || getVerb(c.n || ''),
+                    category: c.c || 'General',
+                    module: c.m || '',
+                    apiVersion: c.a || 'v1.0',
+                    description: '',
+                    permissionCount: c.p || 0,
+                    hasExamples: !!c.e,
+                }));
+                buildNounMap(); filteredCmdlets = [...cmdlets]; populateFilters(); restoreState();
+                if (!hasSeenOnboarding) setTimeout(showNextTip, 800);
+                loadDescriptions();
+                loadAllModuleDetails();
+            } catch (e) {
+                console.warn('Manifest load failed, trying cmdlets.json:', e.message);
+                try {
+                    const response = await fetch('data/cmdlets.json');
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const data = await response.json();
+                    const arr = Array.isArray(data) ? data : (data.cmdlets || [data]);
+                    arr.forEach(function(c) {
+                        var mod = c.module || '';
+                        if (!mod) return;
+                        if (!moduleDetailCache.has(mod)) moduleDetailCache.set(mod, { module: mod, cmdlets: {} });
+                        moduleDetailCache.get(mod).cmdlets[c.name] = {
+                            syntax: c.syntax || '',
+                            examples: Array.isArray(c.examples) ? c.examples : (c.examples ? [c.examples] : []),
+                            permissions: Array.isArray(c.permissions) ? c.permissions : (c.permissions ? [c.permissions] : []),
+                        };
+                    });
+                    cmdlets = arr.map(c => ({
+                        name: c.name || 'Unknown Cmdlet',
+                        verb: c.verb || getVerb(c.name || ''),
+                        category: c.category || 'General',
+                        module: c.module || '',
+                        apiVersion: c.apiVersion || 'v1.0',
+                        description: c.description || 'Microsoft Entra PowerShell cmdlet.',
+                        permissionCount: Array.isArray(c.permissions) ? c.permissions.length : 0,
+                        hasExamples: Array.isArray(c.examples) && c.examples.length > 0,
+                    }));
+                    buildNounMap(); filteredCmdlets = [...cmdlets];
+                    buildPermissionIndex(); populateFilters(); populatePermissionFilter(); restoreState();
+                    if (!hasSeenOnboarding) setTimeout(showNextTip, 800);
+                } catch (e2) {
+                    document.getElementById('cmdletsGrid').innerHTML = '<div style="text-align:center;padding:60px 20px"><h3 style="color:var(--red);font-family:var(--font-display);font-size:1.4rem;letter-spacing:0.1em">CONNECTION FAILED</h3><p style="color:var(--text-ghost);font-family:var(--font-mono);font-size:0.75rem;margin-top:8px">Unable to load data. Run extraction script.</p></div>';
+                }
+            }
+        }
+
+        async function loadModuleDetail(moduleName) {
+            if (moduleDetailCache.has(moduleName)) return moduleDetailCache.get(moduleName);
+            try {
+                const response = await fetch('data/modules/' + encodeURIComponent(moduleName) + '.json');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                moduleDetailCache.set(moduleName, data);
+                return data;
+            } catch (e) {
+                console.warn('Module detail fetch failed for ' + moduleName + ':', e.message);
+                return null;
+            }
+        }
+
+        function buildPermissionIndex() {
+            permissionIndex.clear();
+            moduleDetailCache.forEach(function(modData) {
+                if (!modData || !modData.cmdlets) return;
+                Object.keys(modData.cmdlets).forEach(function(cmdName) {
+                    var perms = modData.cmdlets[cmdName].permissions;
+                    if (!Array.isArray(perms)) return;
+                    perms.forEach(function(p) {
+                        if (!permissionIndex.has(p)) permissionIndex.set(p, new Set());
+                        permissionIndex.get(p).add(cmdName);
+                    });
+                });
+            });
+        }
+
+        function populatePermissionFilter() {
+            var select = document.getElementById('permissionFilter');
+            var currentVal = select.value;
+            var perms = [...permissionIndex.keys()].sort();
+            select.innerHTML = '<option value="">All Permissions</option>' +
+                perms.map(function(p) {
+                    return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + ' (' + permissionIndex.get(p).size + ')</option>';
+                }).join('');
+            if (currentVal && perms.includes(currentVal)) select.value = currentVal;
+        }
+
+        async function loadAllModuleDetails() {
+            var modules = [...new Set(cmdlets.map(function(c) { return c.module; }).filter(function(m) { return m; }))];
+            await Promise.all(modules.map(function(m) { return loadModuleDetail(m); }));
+            buildPermissionIndex();
+            populatePermissionFilter();
+        }
+
+        async function loadDescriptions() {
+            try {
+                var resp = await fetch('data/descriptions.json');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var descMap = await resp.json();
+                cmdlets.forEach(function(c) {
+                    c.description = descMap[c.name] || 'Microsoft Entra PowerShell cmdlet.';
+                });
+                descriptionsLoaded = true;
+                updateRenderedDescriptions(descMap);
+                var searchTerm = document.getElementById('searchInput').value.trim();
+                if (searchTerm) filterCmdlets();
+            } catch (e) {
+                console.warn('Descriptions load failed:', e.message);
+                descriptionsLoaded = true;
+            }
+        }
+
+        function updateRenderedDescriptions(descMap) {
+            document.querySelectorAll('.cmdlet-card').forEach(function(card) {
+                var name = card.dataset.name;
+                if (!name) return;
+                var desc = descMap[name] || 'Microsoft Entra PowerShell cmdlet.';
+                var el = card.querySelector('.card-desc');
+                if (el) el.textContent = desc;
+            });
+        }
+
+        async function populateCardDetail(card, cmdletName, moduleName) {
+            const detailContainer = card.querySelector('.card-detail');
+            if (!detailContainer || detailContainer.dataset.loaded === 'true') return;
+            detailContainer.innerHTML = '<div style="text-align:center;padding:12px"><div class="crt-spinner crt-spinner-sm" style="display:inline-block"></div><div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-ghost);margin-top:4px">LOADING</div></div>';
+            const moduleData = await loadModuleDetail(moduleName);
+            if (!moduleData || !moduleData.cmdlets || !moduleData.cmdlets[cmdletName]) {
+                detailContainer.innerHTML = '<p style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-ghost);padding:8px 0">NO DATA AVAILABLE</p>';
+                detailContainer.dataset.loaded = 'true';
+                return;
+            }
+            const detail = moduleData.cmdlets[cmdletName];
+            let html = '';
+
+            if (detail.syntax) {
+                html += '<div class="detail-syntax">' + escapeHtml(detail.syntax) +
+                    '<button class="copy-btn" data-copy-syntax="1" title="Copy" onclick="event.stopPropagation()"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>';
+            }
+
+            if (detail.syntax) {
+                const params = parseParameters(detail.syntax);
+                if (params.length > 0) {
+                    html += '<details onclick="event.stopPropagation()"><summary class="detail-summary"><svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg><span>' + params.length + ' parameter' + (params.length > 1 ? 's' : '') + '</span></summary>' +
+                        '<table class="params-table"><thead><tr><th>Param</th><th>Type</th><th>Req</th></tr></thead><tbody>' +
+                        params.map(function(p) {
+                            return '<tr><td class="param-name">' + escapeHtml(p.name) + '</td><td class="param-type">' + escapeHtml(p.type) + '</td><td class="' + (p.required ? 'param-req' : 'param-opt') + '">' + (p.required ? 'YES' : 'NO') + '</td></tr>';
+                        }).join('') + '</tbody></table></details>';
+                }
+            }
+
+            if (detail.examples && detail.examples.length > 0) {
+                html += '<details class="examples-section" onclick="event.stopPropagation()"><summary class="detail-summary"><svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg><span>' + detail.examples.length + ' example' + (detail.examples.length > 1 ? 's' : '') + '</span></summary><div style="margin-top:6px">' +
+                    detail.examples.map(function(ex) {
+                        return '<div class="example-block">' + highlightPowerShell(escapeHtml(ex)) +
+                            '<button class="copy-btn" data-copy-ex="1" title="Copy" onclick="event.stopPropagation()"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>';
+                    }).join('') + '</div></details>';
+            }
+
+            if (detail.permissions && detail.permissions.length > 0) {
+                html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">' +
+                    detail.permissions.map(function(p) { return '<span class="perm-tag">' + escapeHtml(p) + '</span>'; }).join('') + '</div>';
+            }
+
+            const noun = cmdletName.indexOf('-') > 0 ? cmdletName.substring(cmdletName.indexOf('-') + 1) : '';
+            const related = noun && nounMap[noun] ? nounMap[noun].filter(function(n) { return n !== cmdletName; }) : [];
+            if (related.length > 0) {
+                html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' +
+                    related.slice(0, 5).map(function(r) {
+                        return '<button class="related-btn" onclick="event.stopPropagation();document.getElementById(\'searchInput\').value=\'' + escapeHtml(r) + '\';filterCmdlets()">' + escapeHtml(r) + '</button>';
+                    }).join('') +
+                    (related.length > 5 ? '<span style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-ghost);align-self:center;padding:0 4px">+' + (related.length - 5) + ' more</span>' : '') + '</div>';
+            }
+
+            detailContainer.innerHTML = html;
+            detailContainer.dataset.loaded = 'true';
+        }
+
+        const tagBase = 'verb-tag';
+        const tagInactive = '';
+        const tagActive = 'verb-tag-active';
+
+        function populateFilters() {
+            const catSelect = document.getElementById('categoryFilter');
+            const categories = [...new Set(cmdlets.map(c => c.category))].sort();
+            catSelect.innerHTML = '<option value="">All Categories</option>' + categories.map(c => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join('');
+
+            const modSelect = document.getElementById('moduleFilter');
+            const modules = [...new Set(cmdlets.map(c => c.module).filter(m => m))].sort();
+            modSelect.innerHTML = '<option value="">All Modules</option>' + modules.map(m => {
+                const short = m.replace(/^Microsoft\.Graph\./, '');
+                return '<option value="' + escapeHtml(m) + '">' + escapeHtml(short) + '</option>';
+            }).join('');
+
+            const verbs = [...new Set(cmdlets.map(c => c.verb).filter(v => v))].sort();
+            const vc = document.getElementById('verbFilters');
+            vc.innerHTML = '<button class="verb-tag verb-tag-active" data-filter="all">All</button>' +
+                verbs.map(v => '<button class="verb-tag" data-filter="' + escapeHtml(v) + '">' + escapeHtml(v) + '</button>').join('');
+
+            vc.querySelectorAll('button').forEach(function(tag) {
+                tag.addEventListener('click', function() {
+                    var filter = this.dataset.filter;
+                    if (filter === 'all') { activeVerbs.clear(); }
+                    else if (activeVerbs.has(filter)) { activeVerbs.delete(filter); }
+                    else { activeVerbs.add(filter); }
+                    refreshVerbButtonStyles();
+                    filterCmdlets();
+                });
+            });
+            renderPresets();
+        }
+
+        function filterCmdlets() {
+            var searchTerm = document.getElementById('searchInput').value.trim();
+            var searchLower = searchTerm.toLowerCase();
+            var categoryVal = document.getElementById('categoryFilter').value;
+            var moduleVal = document.getElementById('moduleFilter').value;
+            var permVal = document.getElementById('permissionFilter').value;
+            var apiVal = document.getElementById('apiVersionFilter').value;
+            currentSort = document.getElementById('sortSelect').value;
+            if (searchTerm.length >= 2) saveRecentSearch(searchTerm);
+
+            filteredCmdlets = cmdlets.filter(function(c) {
+                if (searchLower) {
+                    var nameRaw = fuzzyScore(searchLower, c.name);
+                    var nameScore = nameRaw * (1 + searchLower.length / c.name.length);
+                    var descScore = descriptionsLoaded ? fuzzyScore(searchLower, c.description) * 0.3 : 0;
+                    c._score = nameScore + descScore + fuzzyScore(searchLower, c.category) * 0.2;
+                    if (c._score < searchLower.length * 2) return false;
+                } else { c._score = 0; }
+                var matchesPerm = !permVal || (permissionIndex.has(permVal) && permissionIndex.get(permVal).has(c.name));
+                return (!categoryVal || c.category === categoryVal) &&
+                    (!moduleVal || c.module === moduleVal) &&
+                    matchesPerm &&
+                    (!apiVal || c.apiVersion === apiVal) &&
+                    (activeVerbs.size === 0 || activeVerbs.has(c.verb));
+            });
+
+            if (searchLower) { filteredCmdlets.sort((a, b) => b._score - a._score); }
+            else {
+                switch (currentSort) {
+                    case 'category': filteredCmdlets.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)); break;
+                    case 'permissions': filteredCmdlets.sort((a, b) => b.permissionCount - a.permissionCount || a.name.localeCompare(b.name)); break;
+                    case 'examples': filteredCmdlets.sort((a, b) => (b.hasExamples?1:0) - (a.hasExamples?1:0) || a.name.localeCompare(b.name)); break;
+                    default: filteredCmdlets.sort((a, b) => a.name.localeCompare(b.name));
+                }
+            }
+            focusedCardIndex = -1;
+            renderCmdlets(); updateStats(); serializeState(); buildAlphaIndex(); updateFilterBadge();
+        }
+
+        function buildCardHtml(c, animDelay) {
+            var verb = (c.verb || getVerb(c.name)).toLowerCase();
+            var learnUrl = getLearnUrl(c);
+            var learnLink = learnUrl ? ' <a href="' + learnUrl + '" target="_blank" rel="noopener" title="MS Learn" onclick="event.stopPropagation()"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>' : '';
+            var apiClass = c.apiVersion === 'beta' ? 'badge-api-beta' : 'badge-api-stable';
+            var apiBadge = '<span class="badge ' + apiClass + '">' + escapeHtml(c.apiVersion || 'v1.0') + '</span>';
+            var permBadge = c.permissionCount > 0 ? '<span class="badge badge-perm">' + c.permissionCount + ' PERM' + (c.permissionCount > 1 ? 'S' : '') + '</span>' : '';
+            var exBadge = c.hasExamples ? '<span class="badge badge-examples">EXAMPLES</span>' : '';
+
+            return '<div class="cmdlet-card animate-slide-in verb-' + escapeHtml(verb) + '" style="animation-delay:' + animDelay + 'ms" data-name="' + escapeHtml(c.name) + '" data-module="' + escapeHtml(c.module) + '">' +
+                '<div class="card-header"><div class="card-name">' + escapeHtml(c.name) + learnLink + '</div>' +
+                '<div class="card-badges">' + apiBadge + '<span class="badge badge-category">' + escapeHtml(c.category) + '</span></div></div>' +
+                '<p class="card-desc">' + (c.description ? escapeHtml(c.description) : '') + '</p>' +
+                '<div class="card-meta">' + permBadge + exBadge + '</div>' +
+                '<div class="card-detail"></div></div>';
+        }
+
+        function renderNextChunk() {
+            var grid = document.getElementById('cmdletsGrid');
+            var chunk = filteredCmdlets.slice(renderedCount, renderedCount + CHUNK_SIZE);
+            if (chunk.length === 0) return;
+            var html = chunk.map((c, i) => buildCardHtml(c, Math.min(i * 15, 300))).join('');
+            grid.insertAdjacentHTML('beforeend', html);
+            renderedCount += chunk.length;
+            if (renderedCount >= filteredCmdlets.length) {
+                var sentinel = document.getElementById('scrollSentinel');
+                if (scrollObserver && sentinel) scrollObserver.unobserve(sentinel);
+            }
+        }
+
+        function renderCmdlets() {
+            var grid = document.getElementById('cmdletsGrid');
+            var noResults = document.getElementById('noResults');
+            if (filteredCmdlets.length === 0) { grid.style.display = 'none'; noResults.style.display = 'block'; return; }
+            grid.style.display = ''; noResults.style.display = 'none';
+            renderedCount = 0; grid.innerHTML = '';
+            renderNextChunk(); setupScrollObserver();
+        }
+
+        function setupScrollObserver() {
+            if (scrollObserver) scrollObserver.disconnect();
+            var sentinel = document.getElementById('scrollSentinel');
+            scrollObserver = new IntersectionObserver(entries => {
+                if (entries[0].isIntersecting && renderedCount < filteredCmdlets.length) renderNextChunk();
+            }, { rootMargin: '200px' });
+            scrollObserver.observe(sentinel);
+        }
+
+        function updateStats() {
+            document.getElementById('totalCmdlets').textContent = cmdlets.length;
+            document.getElementById('filteredCount').textContent = filteredCmdlets.length;
+        }
+
+        function fuzzyScore(query, target) {
+            if (!query || !target) return 0;
+            var q = query.toLowerCase(), t = target.toLowerCase();
+            if (t.includes(q)) return 100 + (q.length / t.length) * 50;
+            var qi = 0, score = 0, consecutive = 0, lastIdx = -2;
+            for (var ti = 0; ti < t.length && qi < q.length; ti++) {
+                if (t[ti] === q[qi]) {
+                    score += 1;
+                    if (ti === lastIdx + 1) { consecutive++; score += consecutive * 2; } else consecutive = 0;
+                    if (ti === 0 || t[ti-1] === '-' || t[ti-1] === ' ' || t[ti-1] === '.') score += 5;
+                    lastIdx = ti; qi++;
+                }
+            }
+            return qi === q.length ? score : 0;
+        }
+
+        function highlightPowerShell(code) {
+            var html = code;
+            html = html.replace(/(&#39;[^&#]*?&#39;)/g, '<span class="ps-string">$1</span>');
+            html = html.replace(/(&quot;[^&]*?&quot;)/g, '<span class="ps-string">$1</span>');
+            html = html.replace(/((?<!&)#[^\n]*)/g, '<span class="ps-comment">$1</span>');
+            html = html.replace(/(\$\w+)/g, '<span class="ps-variable">$1</span>');
+            html = html.replace(/\b([A-Z][a-z]+-[A-Z]\w+)/g, '<span class="ps-cmdlet">$1</span>');
+            html = html.replace(/(\[[A-Z]\w+(?:\.\w+)*(?:\[\])?\])/g, '<span class="ps-type">$1</span>');
+            return html;
+        }
+
+        var commonParams = new Set(['WhatIf','Confirm','Break','Headers','HttpPipelineAppend','HttpPipelinePrepend','Proxy','ProxyCredential','ProxyUseDefaultCredentials','ResponseHeadersVariable','AdditionalProperties']);
+        function parseParameters(syntax) {
+            var params = [], paramStr = syntax.substring(syntax.indexOf(' ') + 1);
+            var re = /(\[)?-(\w+)(?:\s+<([^>]+)>)?/g, m;
+            while ((m = re.exec(paramStr)) !== null) {
+                if (commonParams.has(m[2]) || m[2] === 'CommonParameters') continue;
+                params.push({ name: m[2], type: m[3] || 'switch', required: !m[1] });
+            }
+            return params;
+        }
+
+        function getLearnUrl(c) {
+            if (!c.module) return '';
+            return 'https://learn.microsoft.com/powershell/module/' + c.module.toLowerCase() + '/' + c.name.toLowerCase();
+        }
+
+        function buildNounMap() {
+            nounMap = {};
+            cmdlets.forEach(function(c) {
+                var idx = c.name.indexOf('-');
+                if (idx > 0) { var noun = c.name.substring(idx + 1); if (!nounMap[noun]) nounMap[noun] = []; nounMap[noun].push(c.name); }
+            });
+        }
+
+        function buildAlphaIndex() {
+            var nav = document.getElementById('alphaIndex');
+            if (!nav) return;
+            var letters = [...new Set(filteredCmdlets.map(c => c.name[0].toUpperCase()))].sort();
+            nav.innerHTML = letters.map(l => '<button onclick="scrollToLetter(\'' + l + '\')">' + l + '</button>').join('');
+        }
+        function scrollToLetter(letter) {
+            var idx = filteredCmdlets.findIndex(c => c.name[0].toUpperCase() === letter);
+            if (idx < 0) return;
+            while (renderedCount <= idx) renderNextChunk();
+            var cards = document.querySelectorAll('#cmdletsGrid > div');
+            if (cards[idx]) cards[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function showRecentSearches() {
+            var dd = document.getElementById('recentSearches');
+            var input = document.getElementById('searchInput');
+            if (input.value || recentSearches.length === 0) { dd.style.display = 'none'; return; }
+            dd.style.display = 'block';
+            dd.innerHTML = recentSearches.map(s => '<button onclick="applyRecentSearch(this.textContent)">' + escapeHtml(s) + '</button>').join('') +
+                '<button class="clear-btn" onclick="clearRecentSearches()">Clear History</button>';
+        }
+        function saveRecentSearch(term) {
+            if (!term || term.length < 2) return;
+            recentSearches = [term, ...recentSearches.filter(s => s !== term)].slice(0, 8);
+            localStorage.setItem('recentSearches', JSON.stringify(recentSearches));
+        }
+        function applyRecentSearch(term) { document.getElementById('searchInput').value = term; document.getElementById('recentSearches').style.display = 'none'; filterCmdlets(); }
+        function clearRecentSearches() { recentSearches = []; localStorage.removeItem('recentSearches'); document.getElementById('recentSearches').style.display = 'none'; }
+
+        function serializeState() {
+            var p = new URLSearchParams();
+            var q = document.getElementById('searchInput').value; if (q) p.set('q', q);
+            var cat = document.getElementById('categoryFilter').value; if (cat) p.set('cat', cat);
+            var mod = document.getElementById('moduleFilter').value; if (mod) p.set('mod', mod);
+            var perm = document.getElementById('permissionFilter').value; if (perm) p.set('perm', perm);
+            var api = document.getElementById('apiVersionFilter').value; if (api) p.set('api', api);
+            if (activeVerbs.size > 0) p.set('verbs', [...activeVerbs].join(','));
+            if (currentSort !== 'alpha') p.set('sort', currentSort);
+            var hash = p.toString();
+            history.replaceState(null, '', hash ? '#' + hash : location.pathname + location.search);
+        }
+        function restoreState() {
+            var hash = location.hash.slice(1);
+            if (!hash) { filterCmdlets(); return; }
+            var p = new URLSearchParams(hash);
+            if (p.has('q')) document.getElementById('searchInput').value = p.get('q');
+            if (p.has('cat')) document.getElementById('categoryFilter').value = p.get('cat');
+            if (p.has('mod')) document.getElementById('moduleFilter').value = p.get('mod');
+            if (p.has('perm')) document.getElementById('permissionFilter').value = p.get('perm');
+            if (p.has('api')) document.getElementById('apiVersionFilter').value = p.get('api');
+            if (p.has('verbs')) { activeVerbs = new Set(p.get('verbs').split(',')); refreshVerbButtonStyles(); }
+            if (p.has('sort')) { currentSort = p.get('sort'); document.getElementById('sortSelect').value = currentSort; }
+            filterCmdlets();
+        }
+
+        function refreshVerbButtonStyles() {
+            document.querySelectorAll('#verbFilters button').forEach(function(btn) {
+                var f = btn.dataset.filter;
+                var active = (f === 'all' && activeVerbs.size === 0) || activeVerbs.has(f);
+                btn.classList.toggle('verb-tag-active', active);
+            });
+        }
+
+        function savePreset() {
+            var name = prompt('Preset name:');
+            if (!name) return;
+            savedPresets.push({
+                name: name,
+                q: document.getElementById('searchInput').value,
+                cat: document.getElementById('categoryFilter').value,
+                mod: document.getElementById('moduleFilter').value,
+                perm: document.getElementById('permissionFilter').value,
+                api: document.getElementById('apiVersionFilter').value,
+                verbs: [...activeVerbs],
+                sort: currentSort
+            });
+            localStorage.setItem('savedPresets', JSON.stringify(savedPresets));
+            renderPresets();
+        }
+        function loadPreset(idx) {
+            var p = savedPresets[idx]; if (!p) return;
+            document.getElementById('searchInput').value = p.q || '';
+            document.getElementById('categoryFilter').value = p.cat || '';
+            document.getElementById('moduleFilter').value = p.mod || '';
+            document.getElementById('permissionFilter').value = p.perm || '';
+            document.getElementById('apiVersionFilter').value = p.api || '';
+            activeVerbs = new Set(p.verbs || []);
+            currentSort = p.sort || 'alpha';
+            document.getElementById('sortSelect').value = currentSort;
+            refreshVerbButtonStyles(); filterCmdlets();
+        }
+        function deletePreset(idx) { savedPresets.splice(idx, 1); localStorage.setItem('savedPresets', JSON.stringify(savedPresets)); renderPresets(); }
+        function renderPresets() {
+            var el = document.getElementById('presetsList'); if (!el) return;
+            el.innerHTML = savedPresets.map((p, i) =>
+                '<span class="preset-chip"><button onclick="loadPreset(' + i + ')">' + escapeHtml(p.name) + '</button><button onclick="deletePreset(' + i + ')">&times;</button></span>'
+            ).join('');
+        }
+
+        function toggleExportMenu() { var m = document.getElementById('exportMenu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
+        function exportResults(format) {
+            document.getElementById('exportMenu').style.display = 'none';
+            var content, filename, mime;
+            if (format === 'json') {
+                content = JSON.stringify(filteredCmdlets.map(c => ({ name: c.name, category: c.category, module: c.module, apiVersion: c.apiVersion, description: c.description })), null, 2);
+                filename = 'cmdlets.json'; mime = 'application/json';
+            } else {
+                var rows = [['Name','Category','Module','API Version','Description']];
+                filteredCmdlets.forEach(c => rows.push([c.name, c.category, c.module||'', c.apiVersion||'', '"'+c.description.replace(/"/g,'""')+'"']));
+                content = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+                filename = 'cmdlets.csv'; mime = 'text/csv';
+            }
+            var blob = new Blob([content], { type: mime });
+            var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard) navigator.clipboard.writeText(text);
+            else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
+        }
+
+        function updateFilterBadge() {
+            var count = 0;
+            if (activeVerbs.size > 0) count++;
+            if (document.getElementById('categoryFilter').value) count++;
+            if (document.getElementById('moduleFilter').value) count++;
+            if (document.getElementById('permissionFilter').value) count++;
+            if (document.getElementById('apiVersionFilter').value) count++;
+            var badge = document.getElementById('filterBadge');
+            if (count > 0) { badge.textContent = count; badge.classList.add('active'); }
+            else { badge.classList.remove('active'); }
+        }
+        function toggleMobileFilters() { var f = document.getElementById('verbFilters'); var hidden = window.getComputedStyle(f).display === 'none'; f.style.display = hidden ? 'flex' : 'none'; }
+
+        function updateCardFocus() {
+            document.querySelectorAll('.card-focused').forEach(el => el.classList.remove('card-focused'));
+            var cards = document.querySelectorAll('#cmdletsGrid > .cmdlet-card');
+            if (focusedCardIndex >= 0 && focusedCardIndex < cards.length) {
+                cards[focusedCardIndex].classList.add('card-focused');
+                cards[focusedCardIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        // -- Event listeners --
+        document.getElementById('searchInput').addEventListener('input', debounce(filterCmdlets, 150));
+        document.getElementById('searchInput').addEventListener('focus', showRecentSearches);
+        document.getElementById('searchInput').addEventListener('blur', () => setTimeout(() => { document.getElementById('recentSearches').style.display = 'none'; }, 200));
+        document.getElementById('categoryFilter').addEventListener('change', filterCmdlets);
+        document.getElementById('moduleFilter').addEventListener('change', filterCmdlets);
+        document.getElementById('permissionFilter').addEventListener('change', filterCmdlets);
+        document.getElementById('apiVersionFilter').addEventListener('change', filterCmdlets);
+        document.getElementById('sortSelect').addEventListener('change', filterCmdlets);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '/' && !['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); document.getElementById('searchInput').focus(); return; }
+            if (e.key === 'Escape') {
+                document.getElementById('searchInput').value = ''; document.getElementById('searchInput').blur();
+                document.getElementById('recentSearches').style.display = 'none';
+                focusedCardIndex = -1; document.querySelectorAll('.card-focused').forEach(el => el.classList.remove('card-focused'));
+                filterCmdlets(); return;
+            }
+            if (['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+            var cards = document.querySelectorAll('#cmdletsGrid > .cmdlet-card');
+            if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); focusedCardIndex = Math.min(focusedCardIndex + 1, cards.length - 1); while (renderedCount <= focusedCardIndex) renderNextChunk(); updateCardFocus(); }
+            else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); focusedCardIndex = Math.max(focusedCardIndex - 1, 0); updateCardFocus(); }
+            else if (e.key === 'Enter' && focusedCardIndex >= 0 && focusedCardIndex < cards.length) {
+                e.preventDefault();
+                var card = cards[focusedCardIndex];
+                card.classList.toggle('card-expanded');
+                if (card.classList.contains('card-expanded')) {
+                    var name = card.dataset.name, mod = card.dataset.module;
+                    if (name && mod) populateCardDetail(card, name, mod);
+                } else { var dc = card.querySelector('.card-detail'); if (dc) { dc.innerHTML = ''; delete dc.dataset.loaded; } }
+            }
+        });
+
+        document.getElementById('cmdletsGrid').addEventListener('click', function(e) {
+            var copyBtn = e.target.closest('[data-copy-syntax], [data-copy-ex]');
+            if (copyBtn) {
+                e.stopPropagation();
+                var container = copyBtn.closest('.detail-syntax') || copyBtn.closest('.example-block');
+                if (container) {
+                    var text = container.textContent;
+                    copyText(text);
+                    var svg = copyBtn.querySelector('svg');
+                    if (svg) { var orig = svg.innerHTML; svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>'; setTimeout(() => { svg.innerHTML = orig; }, 1500); }
+                }
+                return;
+            }
+            if (e.target.closest('a, button, details, summary, select')) return;
+            var card = e.target.closest('.cmdlet-card');
+            if (!card) return;
+            card.classList.toggle('card-expanded');
+            if (card.classList.contains('card-expanded')) {
+                var name = card.dataset.name, mod = card.dataset.module;
+                if (name && mod) populateCardDetail(card, name, mod);
+            } else { var dc = card.querySelector('.card-detail'); if (dc) { dc.innerHTML = ''; delete dc.dataset.loaded; } }
+        });
+
+        window.addEventListener('scroll', function() {
+            var btn = document.getElementById('backToTop');
+            btn.classList.toggle('visible', window.scrollY > 400);
+        }, { passive: true });
+
+        document.addEventListener('click', function(e) { if (!e.target.closest('#exportWrap')) document.getElementById('exportMenu').style.display = 'none'; });
+        window.addEventListener('popstate', restoreState);
+
+        // -- Onboarding --
+        var onboardingTips = [
+            { target: '#searchInput', text: 'Search by cmdlet name, description, or category. Supports fuzzy matching.' },
+            { target: '#verbFilters', text: 'Click verb buttons to filter by action type. Select multiple verbs at once.' },
+            { target: '#categoryFilter', text: 'Use dropdowns to filter by category, module, API version, or change sort order.' },
+            { target: '#cmdletsGrid', text: 'Click any card to expand it and load full details (syntax, examples, permissions).' }
+        ];
+        function showNextTip() {
+            if (onboardingStep >= onboardingTips.length) { dismissOnboarding(); return; }
+            var tip = onboardingTips[onboardingStep];
+            var target = document.querySelector(tip.target);
+            if (!target) { onboardingStep++; showNextTip(); return; }
+            var overlay = document.getElementById('onboardingOverlay');
+            var tipEl = document.getElementById('onboardingTip');
+            overlay.style.display = 'block';
+            document.getElementById('tipText').textContent = tip.text;
+            var rect = target.getBoundingClientRect();
+            tipEl.style.top = Math.min(rect.bottom + 8, window.innerHeight - 150) + 'px';
+            tipEl.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 320)) + 'px';
+            onboardingStep++;
+        }
+        function dismissOnboarding() {
+            hasSeenOnboarding = true;
+            localStorage.setItem('hasSeenOnboarding', 'true');
+            document.getElementById('onboardingOverlay').style.display = 'none';
+        }
+
+        // Dismiss onboarding on scroll
+        window.addEventListener('scroll', function() {
+            if (!hasSeenOnboarding && document.getElementById('onboardingOverlay').style.display !== 'none') dismissOnboarding();
+        }, { passive: true, once: true });
+
+        function switchTheme(file) {
+            if (file && file !== location.pathname.split('/').pop()) {
+                location.href = file + location.hash;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCmdlets);
+    </script>
+    <script data-goatcounter="https://mggraphindex.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
