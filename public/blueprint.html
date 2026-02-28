@@ -7,19 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600&family=Source+Code+Pro:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
-    <script>
-    (function(){
-        var s = localStorage.getItem('appearance');
-        var prefersDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
-        if (s === 'light' || (!s && !prefersDark)) {
-            document.documentElement.classList.add('light');
-        }
-    })();
-    </script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
+            color-scheme: dark;
             --bg-deep: #0a1628;
             --bg-panel: #0d1f3c;
             --bg-raised: #112850;
@@ -159,7 +151,6 @@
         }
         .logo-block { min-width: 0; flex-shrink: 1; overflow: hidden; }
         .stats-row { min-width: 0; flex-shrink: 1; }
-
 
         .logo-block h1 {
             font-family: var(--font-display);
@@ -1065,13 +1056,6 @@
             background: rgba(0, 122, 255, 0.12);
             border-color: rgba(0, 122, 255, 0.25);
         }
-        :root.light .suite-link:hover {
-            border-color: rgba(0, 0, 0, 0.12);
-        }
-        :root.light .suite-link.active {
-            background: rgba(0, 122, 255, 0.08);
-            border-color: rgba(0, 122, 255, 0.20);
-        }
         .suite-icon {
             font-family: var(--font-mono);
             font-size: 0.65rem;
@@ -1080,9 +1064,6 @@
             border-radius: 4px;
             background: rgba(255, 255, 255, 0.08);
             letter-spacing: 0;
-        }
-        :root.light .suite-icon {
-            background: rgba(0, 0, 0, 0.06);
         }
         .suite-link.active .suite-icon {
             background: rgba(0, 122, 255, 0.15);
@@ -1144,10 +1125,6 @@
                             <button onclick="exportResults('csv')">CSV</button>
                         </div>
                     </div>
-                    <button onclick="toggleAppearance()" class="icon-btn" id="appearanceToggle" aria-label="Toggle light/dark mode">
-                        <svg id="iconSun" style="display:none" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                        <svg id="iconMoon" style="display:none" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-                    </button>
                     <select class="theme-switcher" id="themeSwitcher" aria-label="Switch theme" onchange="switchTheme(this.value)">
                         <option value="index.html">Acrylic</option>
                         <option value="cyberpunk.html">Cyberpunk</option>
@@ -1871,19 +1848,6 @@
         window.addEventListener('scroll', function() {
             if (!hasSeenOnboarding && document.getElementById('onboardingOverlay').style.display !== 'none') dismissOnboarding();
         }, { passive: true, once: true });
-
-
-        function toggleAppearance() {
-            var isLight = document.documentElement.classList.toggle('light');
-            localStorage.setItem('appearance', isLight ? 'light' : 'dark');
-            updateAppearanceIcons();
-        }
-
-        function updateAppearanceIcons() {
-            var isLight = document.documentElement.classList.contains('light');
-            document.getElementById('iconSun').style.display = isLight ? 'none' : 'block';
-            document.getElementById('iconMoon').style.display = isLight ? 'block' : 'none';
-        }
         function switchTheme(file) {
             if (file && file !== location.pathname.split('/').pop()) {
                 location.href = file + location.hash;
@@ -1892,7 +1856,6 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             loadCmdlets();
-            updateAppearanceIcons();
         });
     </script>
     <script data-goatcounter="https://mggraphindex.goatcounter.com/count"
