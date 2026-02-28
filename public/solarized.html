@@ -436,6 +436,72 @@
         }
         .export-menu button:hover { background: var(--bg-raised); color: var(--phosphor); }
 
+        .install-help {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 6px;
+            background: rgba(44, 44, 46, 0.95);
+            -webkit-backdrop-filter: var(--glass-blur);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            z-index: 50;
+            min-width: 300px;
+            box-shadow: var(--shadow-lg);
+            padding: 14px;
+        }
+        .install-help-title {
+            font-family: var(--font-body);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+        .install-help-note {
+            font-family: var(--font-body);
+            font-size: 0.8rem;
+            color: var(--text-tertiary);
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        .install-help-cmd {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin-bottom: 6px;
+        }
+        .install-help-cmd:last-child { margin-bottom: 0; }
+        .install-help-cmd code {
+            flex: 1;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+        .install-help-cmd .copy-btn {
+            flex-shrink: 0;
+            background: none;
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 3px 6px;
+            font-size: 0.7rem;
+            font-family: var(--font-body);
+            transition: all 0.15s ease;
+        }
+        .install-help-cmd .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
         /* --- Main grid --- */
         .main-content {
             padding: 24px 0 80px;
@@ -1047,6 +1113,15 @@
                         <div class="stat-label">Showing</div>
                     </div>
                     <div class="stat-divider"></div>
+                    <div style="position:relative" id="installHelpWrap">
+                        <button onclick="toggleInstallHelp()" class="icon-btn" aria-label="Install help" title="Module install instructions">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </button>
+                        <div id="installHelp" class="install-help">
+                            <div class="install-help-title">Install Module</div>
+                            <div class="install-help-cmd"><code>Install-Module Microsoft.Graph.Entra -Scope CurrentUser</code><button class="copy-btn" onclick="navigator.clipboard.writeText('Install-Module Microsoft.Graph.Entra -Scope CurrentUser');this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)" title="Copy">Copy</button></div>
+                        </div>
+                    </div>
                     <div style="position:relative" id="exportWrap">
                         <button onclick="toggleExportMenu()" class="icon-btn" aria-label="Export" title="Export filtered results">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -1639,6 +1714,7 @@
         }
 
         function toggleExportMenu() { var m = document.getElementById('exportMenu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
+        function toggleInstallHelp() { var m = document.getElementById('installHelp'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
         function exportResults(format) {
             document.getElementById('exportMenu').style.display = 'none';
             var content, filename, mime;
@@ -1744,7 +1820,7 @@
             btn.classList.toggle('visible', window.scrollY > 400);
         }, { passive: true });
 
-        document.addEventListener('click', function(e) { if (!e.target.closest('#exportWrap')) document.getElementById('exportMenu').style.display = 'none'; });
+        document.addEventListener('click', function(e) { if (!e.target.closest('#exportWrap')) document.getElementById('exportMenu').style.display = 'none'; if (!e.target.closest('#installHelpWrap')) document.getElementById('installHelp').style.display = 'none'; });
         window.addEventListener('popstate', restoreState);
 
         // -- Onboarding --
