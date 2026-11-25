@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EntraIndex moved to PSIndex</title>
+  <link rel="canonical" href="https://psindex.vercel.app/?s=entra">
+  <meta http-equiv="refresh" content="0; url=https://psindex.vercel.app/?s=entra">
+  <script>
+    (function () {
+      var target = new URL("https://psindex.vercel.app/");
+      target.searchParams.set("s", "entra");
+      var search = new URLSearchParams(window.location.search);
+      var hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      var q = search.get("q") || hash.get("q");
+      if (q && q.trim()) {
+        target.searchParams.set("q", q.trim());
+      }
+      window.location.replace(target.toString());
+    })();
+  </script>
+</head>
+<body>
+  <p>EntraIndex has moved to <a href="https://psindex.vercel.app/?s=entra">PSIndex</a>.</p>
+</body>
+</html>
